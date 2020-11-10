@@ -11,6 +11,25 @@ import imgui
 import numpy as np
 import math
 import itertools
+from enum import Enum
+
+import os
+import sys
+path = os.path.abspath('FBA_MATTING')
+if path not in sys.path:
+    sys.path.append(path)
+from FBA_Matting.demo import pred
+import matplotlib.pyplot as plt
+
+# TODO:
+# 1. Using imgui.ini
+
+
+class Color(Enum):
+    FOREGROUND = [255, 255, 255, 255]
+    BACKGROUND = [0, 0, 0, 255]
+    UNKNOWN = [127, 127, 127, 255]
+    UNDEFINED = [0, 0, 0, 0]
 
 
 class HelloWorld(ImguiLayer):
@@ -23,33 +42,36 @@ class HelloWorld(ImguiLayer):
         self._drag_start_pos = []
         self._prev_mouse_pos = []
         self._brush_radius = 3  # pixel
+        self._brush_color = Color.FOREGROUND
+        self._image_window_size = [400, 400]  # Load from imgui.ini
 
-        image = pygame.image.load('03005.png')
-        texture_surface = pygame.transform.flip(image, False, True)
+        self._image = pygame.image.load('03005.png')
+        texture_surface = pygame.transform.flip(self._image, False, True)
         texture_data = pygame.image.tostring(texture_surface, "RGBA", 1)
 
         self._width = texture_surface.get_width()
         self._height = texture_surface.get_height()
-        self._trimap = np.ones((self._height, self._width, 4)).astype(np.uint8) * 127
+        self._trimap = np.zeros((self._height, self._width, 4)).astype(np.uint8)
+        self._trimap_update_history = []  # Store points information for undo, redo.
 
-        for y in range(self._height):
-            self._trimap[y, :, 2] = int(y / self._height * 255)
+        # for y in range(self._height):
+        #     self._trimap[y, :, 2] = int(y / self._height * 255)
 
         self._trimap = self._trimap.astype(np.uint8)
 
         # Create image texture
-        self._texture_id = (pyglet.gl.GLuint * 1)()
-        pyglet.gl.glGenTextures(1, self._texture_id)
-        pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._texture_id[0])
+        self._image_texture_id = (pyglet.gl.GLuint * 1)()
+        pyglet.gl.glGenTextures(1, self._image_texture_id)
+        pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._image_texture_id[0])
         pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_LINEAR)
         pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_LINEAR)
         pyglet.gl.glTexImage2D(pyglet.gl.GL_TEXTURE_2D, 0, pyglet.gl.GL_RGBA, self._width, self._height, 0,
                                pyglet.gl.GL_RGBA, pyglet.gl.GL_UNSIGNED_BYTE, texture_data)
 
         # Create trimap texture
-        self._trimap_texture_id = (pyglet.gl.GLuint * 1)()
-        pyglet.gl.glGenTextures(1, self._trimap_texture_id)
-        pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._trimap_texture_id[0])
+        self._trimap_image_texture_id = (pyglet.gl.GLuint * 1)()
+        pyglet.gl.glGenTextures(1, self._trimap_image_texture_id)
+        pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._trimap_image_texture_id[0])
         pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_LINEAR)
         pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_LINEAR)
         pyglet.gl.glTexImage2D(pyglet.gl.GL_TEXTURE_2D, 0, pyglet.gl.GL_RGBA, self._width, self._height, 0,
@@ -57,11 +79,24 @@ class HelloWorld(ImguiLayer):
 
         # Generate displacement table
         self._displacement_table = []
+        self.update_brush_size(5)
 
-        for disp_x in range(-self._brush_radius, self._brush_radius + 1):
-            for disp_y in range(-self._brush_radius, self._brush_radius + 1):
-                if math.sqrt(disp_x * disp_x + disp_y * disp_y) <= self._brush_radius:
-                    self._displacement_table.append((disp_x, disp_y))
+    def update_brush_size(self, brush_radius):
+        self._brush_radius = brush_radius
+
+        for displacement_x in range(-self._brush_radius, self._brush_radius + 1):
+            for displacement_y in range(-self._brush_radius, self._brush_radius + 1):
+                if math.sqrt(displacement_x * displacement_x + displacement_y * displacement_y) <= self._brush_radius:
+                    self._displacement_table.append((displacement_x, displacement_y))
+
+    def clear_trimap(self, trimap_color=None):
+        if trimap_color == None:
+            self._trimap[:, :] = Color.UNDEFINED.value
+        else:
+            self._trimap[:, :] = trimap_color.value
+
+    # def predict(self):
+    #     pred(self._im)
 
     # TODO : Apply interpolation algorithm.
     def update_trimap(self, current_mouse_pos):
@@ -112,7 +147,7 @@ class HelloWorld(ImguiLayer):
                 if y + disp_y < 0 or y + disp_y >= self._height:
                     continue
 
-                self._trimap[int(y + disp_y), int(x + disp_x), :] = 255
+                self._trimap[int(y + disp_y), int(x + disp_x), :] = self._brush_color.value
 
         # for i, point in enumerate(points):
         #     if i != 0 and i != len(points) - 1:
@@ -133,7 +168,7 @@ class HelloWorld(ImguiLayer):
         #
         #         self._trimap[int(y + disp_y), int(x + disp_x), :] = [255, 0, 0, 255]
 
-        pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._trimap_texture_id[0])
+        pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._trimap_image_texture_id[0])
         pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_LINEAR)
         pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_LINEAR)
         pyglet.gl.glTexImage2D(pyglet.gl.GL_TEXTURE_2D, 0, pyglet.gl.GL_RGBA, self._width, self._height, 0,
@@ -155,7 +190,11 @@ class HelloWorld(ImguiLayer):
                 imgui.end_menu()
             imgui.end_main_menu_bar()
 
+        ################
+        # Image window #
+        ################
         # ConfigWindowsMoveFromTitleBarOnly not mapped yet in PyImGui.
+        imgui.set_next_window_size(self._image_window_size[0], self._image_window_size[1])
         imgui.begin("Image", flags=imgui.WINDOW_HORIZONTAL_SCROLLING_BAR + imgui.WINDOW_NO_MOVE)
 
         # Get position info to calculate mouse pos on image.
@@ -164,29 +203,28 @@ class HelloWorld(ImguiLayer):
         cursor_pos = imgui.get_cursor_pos()
         scroll_y_pos = imgui.get_scroll_y()
         scroll_x_pos = imgui.get_scroll_x()
-        relative_pos = [mouse_pos[0] - window_pos[0] - cursor_pos[0] + scroll_x_pos, mouse_pos[1] - window_pos[1] - cursor_pos[1] + scroll_y_pos]
+        relative_pos = [mouse_pos[0] - window_pos[0] - cursor_pos[0] + scroll_x_pos,
+                        mouse_pos[1] - window_pos[1] - cursor_pos[1] + scroll_y_pos]
 
-        # Calculate scroll bar offset.
-        # print(imgui.get_scroll_y(), imgui.get_scroll_max_y(), imgui.get_window_height(), cursor_pos[1])
-
-        # if imgui.is_mouse_clicked(0):
-        #     print("Mouse clicked")
-        # else:
-        #     print("Mouse not clicked")
+        # Mouse right click menu activity : selectable not work very well.
+        # if imgui.is_window_hovered() and imgui.is_mouse_clicked(2):
+        #     imgui.open_popup('Image menu')
         #
+        # if imgui.begin_popup('Image menu'):
+        #     imgui.text('Menu')
+        #     imgui.separator()
+        #     if imgui.selectable('Test 0'):
+        #         print('Test 0')
+        #     if imgui.selectable('Test 1'):
+        #         print('Test 1')
+        #     imgui.end_popup()
 
         # Mouse activity
-        # 아이들 상태
-        # 마우스 클릭 : 마우스 포지션 저장.
-        # 드래깅 ( 마우스 클릭된 상태에서 마우스 포지션이 바뀌면 드래깅 상태로 인식 ) : 포지션 업데이트
-        # 릴리즈 : 포지션 업데이트.
-
-        if imgui.is_mouse_clicked(0):
+        if imgui.is_mouse_clicked(0) and imgui.is_window_hovered():
             self._drag_start_pos = relative_pos
             self._prev_mouse_pos = relative_pos
 
-        if imgui.is_mouse_dragging(0):
-
+        if imgui.is_mouse_dragging(0) and imgui.is_window_hovered():
             displacement_x = relative_pos[0] - self._prev_mouse_pos[0]
             displacement_y = relative_pos[1] - self._prev_mouse_pos[1]
 
@@ -194,13 +232,19 @@ class HelloWorld(ImguiLayer):
                 self.update_trimap(relative_pos)
             self._prev_mouse_pos = relative_pos
 
-        imgui.image(self._trimap_texture_id[0], self._width, self._height)
+        imgui.image(self._trimap_image_texture_id[0], self._width, self._height)
+        current_window_size = imgui.get_window_size()
+        self._image_window_size = [current_window_size[0], current_window_size[1]]
+        imgui.end()
 
+        ######################################################################
+
+        imgui.begin('Image menu')
+        imgui.text('Image menu')
         imgui.end()
 
         pyglet.gl.glClearColor(0., 0., 0., 0)
         pyglet.gl.glClear(pyglet.gl.GL_COLOR_BUFFER_BIT)
-
         imgui.render()
         self.renderer.render(imgui.get_draw_data())
 
@@ -209,7 +253,6 @@ def main():
     director.init(width=800, height=600, resizable=True)
 
     imgui.create_context()
-    io = imgui.get_io()
 
     hello_layer = HelloWorld()
 
