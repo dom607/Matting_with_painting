@@ -27,10 +27,19 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from utils import update_texture
 
+
 # TODO:
 # 1. Using imgui.ini
-# 2. Change trimap color format from RGB to GRAY
-# 3. Add preview window. (Predict Alpha, masked_image with predict alpha, predict background, predict foreground)
+# 2. Add preview window. (Predict Alpha, masked_image with predict alpha, predict background, predict foreground)
+# 3. Zomm in / out
+# 4. Brush radius visualization
+# 5. Speed up.
+#  - Trimap make gray
+#  - Make trimap update faster.
+#  - Using shader to display blended result.
+#  - Remove duplicated process. Especially in predict process.
+# 6. 점을 찍을 수 있어야 된다. 현재 드래그만 됨.
+# 7. Undo / Redo
 
 
 class Matting_Model_Args:
@@ -59,7 +68,7 @@ class HelloWorld(ImguiLayer):
         self._brush_color = Color.FOREGROUND
         self._image_window_size = [400, 400]  # Load from imgui.ini
 
-        # Image buffer
+        # Images
         self._image = None
         self._blended_image = None
         self._float_image = None
@@ -67,23 +76,21 @@ class HelloWorld(ImguiLayer):
         self._predict_alpha = None
         self._predict_foreground = None
         self._predict_background = None
+        self._height = -1
+        self._width = -1
 
         # self.load_image('03005.png')
         self.load_image('C:/dataSet/clothing_co_parsing/original/photos/0002.jpg')
         self._matting_model = build_model(Matting_Model_Args())
-
-        self._height = self._image.shape[0]
-        self._width = self._image.shape[1]
         self._trimap = np.zeros((self._height, self._width, 3)).astype(np.uint8)
+        self._trimap[:, :] = Color.BACKGROUND.value
         self._trimap_update_history = []  # Store points information for undo, redo.
         self._trimap_transparency = 0.5
         self._predict_alpha = np.zeros((self._height, self._width, 4)).astype(np.uint8)
+        self.update_blended_image()
 
         # Control window variable
         self._selected_brush_index = 0  # 0 : Fore, 1 : Back, 2 : Unknown, 3 : Undefined(Not used)
-
-        # for y in range(self._height):
-        #     self._trimap[y, :, 2] = int(y / self._height * 255)
 
         self._trimap = self._trimap.astype(np.uint8)
         # Disable buffer alignment. Default 4.
@@ -94,7 +101,7 @@ class HelloWorld(ImguiLayer):
         self._image_texture_id = (pyglet.gl.GLuint * 1)()
         pyglet.gl.glGenTextures(1, self._image_texture_id)
         update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
-                       self._width, self._height, self._image.tobytes())
+                       self._width, self._height, self._blended_image.tobytes())
 
         # Create trimap texture
         self._trimap_image_texture_id = (pyglet.gl.GLuint * 1)()
@@ -120,10 +127,12 @@ class HelloWorld(ImguiLayer):
         # self._image = cv2.cvtColor(self._image, cv2.COLOR_BGR2RGB)
         self._image = self._image.astype(np.uint8)
         self._float_image = self._image / 255.0
+        self._height = self._image.shape[0]
+        self._width = self._image.shape[1]
 
     def update_brush_size(self, brush_radius):
         self._brush_radius = brush_radius
-
+        self._displacement_table = []
         for displacement_x in range(-self._brush_radius, self._brush_radius + 1):
             for displacement_y in range(-self._brush_radius, self._brush_radius + 1):
                 if math.sqrt(displacement_x * displacement_x + displacement_y * displacement_y) <= self._brush_radius:
@@ -135,27 +144,36 @@ class HelloWorld(ImguiLayer):
         else:
             self._trimap[:, :] = trimap_color.value
 
+        self.update_blended_image()
+        update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
+                       self._width, self._height, self._blended_image.tobytes())
+        update_texture(self._trimap_image_texture_id[0], pyglet.gl.GL_RGB,
+                       self._width, self._height, self._trimap.tobytes())
         self.predict()
 
     def predict(self):
         gray_tri_map = cv2.cvtColor(self._trimap[:, :, 0:3], cv2.COLOR_RGB2GRAY) / 255.0
         h, w = gray_tri_map.shape
-        trimap = np.zeros((h, w, 2))
-        trimap[gray_tri_map == 1, 1] = 1
-        trimap[gray_tri_map == 0, 0] = 1
+        model_trimap = np.zeros((h, w, 2))
+        model_trimap[gray_tri_map == 1, 1] = 1
+        model_trimap[gray_tri_map == 0, 0] = 1
 
         st = time.perf_counter()
         # self._predict_foreground, self._predict_background, self._predict_alpha = pred(self._float_image,
         #                                                                                trimap,
         #                                                                                self._matting_model)
-        _, _, alpha = pred(self._float_image, trimap, self._matting_model)
+        _, _, alpha = pred(self._float_image, model_trimap, self._matting_model)
         alpha = cv2.cvtColor(alpha, cv2.COLOR_GRAY2RGB)
         self._predict_alpha = (alpha * 255.0).astype(np.uint8)
         update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
                        self._width, self._height, self._predict_alpha.tobytes())
 
         elapsed_time = time.perf_counter() - st
-        print(elapsed_time)
+        print('Prediction time : {}'.format(elapsed_time))
+
+    def update_blended_image(self):
+        self._blended_image = self._image * (1.0 - self._trimap_transparency) + self._trimap * self._trimap_transparency
+        self._blended_image = self._blended_image.astype(np.uint8)
 
     # TODO : Apply interpolation algorithm.
     def update_trimap(self, current_mouse_pos):
@@ -211,8 +229,9 @@ class HelloWorld(ImguiLayer):
 
                 self._trimap[int(y + disp_y), int(x + disp_x), :] = self._brush_color.value
 
-        # self._blended_image = self._image * (1.0 - self._trimap_transparency) + self._trimap * self._trimap_transparency
-
+        self.update_blended_image()
+        update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
+                       self._width, self._height, self._blended_image.tobytes())
         update_texture(self._trimap_image_texture_id[0], pyglet.gl.GL_RGB,
                        self._width, self._height, self._trimap.tobytes())
 
@@ -273,10 +292,6 @@ class HelloWorld(ImguiLayer):
                     self.clear_trimap(Color.UNKNOWN)
 
                 imgui.end_menu()
-
-            # _, selected = imgui.selectable('Test 0')
-            # if selected:
-            #     print('Test 0')
             imgui.end_popup()
 
         # Mouse activity
@@ -294,20 +309,22 @@ class HelloWorld(ImguiLayer):
                 self._drag_started = False
                 self.predict()
 
-        # imgui.image(self._trimap_image_texture_id[0], self._width, self._height)
         imgui.image(self._image_texture_id[0], self._width, self._height)
+        imgui.get_window_draw_list().add_circle(mouse_pos[0], mouse_pos[1], self._brush_radius,
+                                                imgui.get_color_u32_rgba(1, 0, 0, 1), thickness=2.0)
         current_window_size = imgui.get_window_size()
         self._image_window_size = [current_window_size[0], current_window_size[1]]
         imgui.end()
 
-        imgui.begin("Alpha")
+        imgui.begin("Alpha", flags=imgui.WINDOW_HORIZONTAL_SCROLLING_BAR)
         imgui.image(self._predict_alpha_texture_id[0], self._width, self._height)
         imgui.end()
 
         ######################################################################
 
         imgui.begin('Image menu')
-        clicked, current = imgui.combo('Brush type', self._selected_brush_index, ['Foreground', 'Background', 'Unknown'])
+        clicked, current = imgui.combo('Brush type', self._selected_brush_index,
+                                       ['Foreground', 'Background', 'Unknown'])
         if clicked:
             self._selected_brush_index = current
 
@@ -317,9 +334,19 @@ class HelloWorld(ImguiLayer):
                 self._brush_color = Color.BACKGROUND
             else:
                 self._brush_color = Color.UNKNOWN
-        changed, value = imgui.slider_int('Brush radius', self._brush_radius, 1, 50)
+
+        changed, value = imgui.slider_int('Brush radius', self._brush_radius, 1, 15)
         if changed:
             self.update_brush_size(value)
+
+        changed, value = imgui.slider_float('Trimap transparency', self._trimap_transparency, 0, 1)
+        if changed:
+            self._trimap_transparency = value
+            self._blended_image = self._image * (
+                        1.0 - self._trimap_transparency) + self._trimap * self._trimap_transparency
+            self._blended_image = self._blended_image.astype(np.uint8)
+            update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
+                           self._width, self._height, self._blended_image.tobytes())
         imgui.end()
 
         pyglet.gl.glClearColor(0., 0., 0., 0)
