@@ -118,6 +118,7 @@ class HelloWorld(ImguiLayer):
         # Generate displacement table
         self._displacement_table = []
         self.update_brush_size(5)
+        self.predict()
 
     def load_image(self, path_to_image):
         self._image_path = path_to_image
@@ -229,7 +230,7 @@ class HelloWorld(ImguiLayer):
                     continue
 
                 update_coord.add((int(y + disp_y), int(x + disp_x)))
-        self._trimap[list(zip(*update_coord))] = self._brush_color.value
+        self._trimap[tuple(zip(*update_coord))] = self._brush_color.value
 
         self.update_blended_image()
         update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
