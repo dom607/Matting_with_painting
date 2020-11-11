@@ -213,6 +213,7 @@ class HelloWorld(ImguiLayer):
                 x_list = (y_list - b) / a
                 points = list(zip(x_list, y_list))
 
+        update_coord = set()
         for point in points:
             x = point[0]
             y = point[1]
@@ -227,7 +228,8 @@ class HelloWorld(ImguiLayer):
                 if y + disp_y < 0 or y + disp_y >= self._height:
                     continue
 
-                self._trimap[int(y + disp_y), int(x + disp_x), :] = self._brush_color.value
+                update_coord.add((int(y + disp_y), int(x + disp_x)))
+        self._trimap[list(zip(*update_coord))] = self._brush_color.value
 
         self.update_blended_image()
         update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
