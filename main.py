@@ -5,6 +5,8 @@ from cocos.director import director
 
 import pyglet
 import pygame
+import tkinter as tk
+from tkinter import filedialog
 
 from imgui.integrations.cocos2d import ImguiLayer
 import imgui
@@ -31,13 +33,14 @@ from utils import update_texture
 # TODO:
 # 1. Using imgui.ini
 # 2. Add preview window. (Predict Alpha, masked_image with predict alpha, predict background, predict foreground)
-# 3. Zomm in / out
+# 3. Zoom in / out
 # 4. Brush radius visualization
 # 5. Speed up.
-#  - Trimap make gray
+#  - Trimap make gray.
 #  - Make trimap update faster.
 #  - Using shader to display blended result.
 #  - Remove duplicated process. Especially in predict process.
+#  - Accelerate image processing process. ( i.e. Upscale from prediction result )
 # 6. 점을 찍을 수 있어야 된다. 현재 드래그만 됨.
 # 7. Undo / Redo
 
@@ -247,9 +250,20 @@ class HelloWorld(ImguiLayer):
         #     if io.keys_down[i]:
         #         print(i)
 
+        ################
+        # Top menu bar #
+        ################
+
         if imgui.begin_main_menu_bar():
             if imgui.begin_menu("File", True):
+                clicked_open, selected_open = imgui.menu_item('Open')
+                if clicked_open:
+                    root = tk.Tk()
+                    root.withdraw()
+                    image_path = filedialog.askopenfilename()
+                    self.load_image(image_path)
 
+                imgui.separator()
                 clicked_quit, selected_quit = imgui.menu_item(
                     "Quit", 'Cmd+Q', False, True
                 )
