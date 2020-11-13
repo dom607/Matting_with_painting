@@ -83,8 +83,6 @@ class HelloWorld(ImguiLayer):
         self._height = -1
         self._width = -1
 
-        # self.load_image('03005.png')
-        # self.load_image('C:/dataSet/clothing_co_parsing/original/photos/0002.jpg')
         self._matting_model = build_model(Matting_Model_Args())
         self._trimap_update_history = []  # Store points information for undo, redo.
         self._trimap_transparency = 0.5
@@ -145,6 +143,10 @@ class HelloWorld(ImguiLayer):
             self.predict()
             self._image_path = path_to_image
             self._image = np.array(Image.open(self._image_path))
+
+    def save_image(self, path_to_save):
+        if self._predict_alpha is not None:
+            cv2.imwrite(path_to_save, cv2.cvtColor(self._predict_alpha, cv2.COLOR_RGB2GRAY))
 
     def update_brush_size(self, brush_radius):
         self._brush_radius = brush_radius
@@ -268,12 +270,19 @@ class HelloWorld(ImguiLayer):
 
         if imgui.begin_main_menu_bar():
             if imgui.begin_menu("File", True):
-                clicked_open, selected_open = imgui.menu_item('Open')
+                clicked_open, _ = imgui.menu_item('Open')
                 if clicked_open:
                     root = tk.Tk()
                     root.withdraw()
                     image_path = filedialog.askopenfilename()
                     self.load_image(image_path)
+
+                clicked_save, _ = imgui.menu_item('save')
+                if clicked_save:
+                    root = tk.Tk()
+                    root.withdraw()
+                    image_path = filedialog.asksaveasfilename()
+                    self.save_image(image_path)
 
                 imgui.separator()
                 clicked_quit, selected_quit = imgui.menu_item(
