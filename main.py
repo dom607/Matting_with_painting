@@ -138,16 +138,25 @@ class HelloWorld(ImguiLayer):
 
                 # Create image texture
                 pyglet.gl.glGenTextures(1, self._image_texture_id)
+                pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._image_texture_id[0])
+                pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_LINEAR)
+                pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_LINEAR)
                 update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
                                self._width, self._height, self._blended_image.tobytes())
 
                 # Create trimap texture
                 pyglet.gl.glGenTextures(1, self._trimap_image_texture_id)
+                pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._trimap_image_texture_id[0])
+                pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_LINEAR)
+                pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_LINEAR)
                 update_texture(self._trimap_image_texture_id[0], pyglet.gl.GL_RGB,
                                self._width, self._height, self._trimap.tobytes())
 
                 # Create predict alpha texture
                 pyglet.gl.glGenTextures(1, self._predict_alpha_texture_id)
+                pyglet.gl.glBindTexture(pyglet.gl.GL_TEXTURE_2D, self._predict_alpha_texture_id[0])
+                pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_LINEAR)
+                pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_LINEAR)
                 update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
                                self._width, self._height, self._predict_alpha.tobytes())
                 self.predict()
