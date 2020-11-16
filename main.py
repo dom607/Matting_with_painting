@@ -125,6 +125,12 @@ class HelloWorld(ImguiLayer):
                 self._width = -1
 
                 # Clear gl
+                if self._image_texture_id[0] != 0:
+                    pyglet.gl.glDeleteTextures(1, self._image_texture_id)
+                if self._trimap_image_texture_id[0] != 0:
+                    pyglet.gl.glDeleteTextures(1, self._trimap_image_texture_id)
+                if self._predict_alpha_texture_id[0] != 0:
+                    pyglet.gl.glDeleteTextures(1, self._predict_alpha_texture_id)
 
                 self._image = self._image.astype(np.uint8)
                 self._float_image = cv2.resize(self._image, (self._model_dim, self._model_dim)) / 255.0
