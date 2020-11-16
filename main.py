@@ -27,6 +27,7 @@ from FBA_Matting.demo import pred
 from FBA_Matting.networks.models import build_model
 import matplotlib.pyplot as plt
 from PIL import Image
+import PIL
 from utils import update_texture
 
 
@@ -99,50 +100,55 @@ class HelloWorld(ImguiLayer):
         self.update_brush_size(5)
 
     def load_image(self, path_to_image):
-        image = np.array(Image.open(path_to_image))
-        if image is not None:
-            self._image = image
-            self._image_path = path_to_image
-            self._trimap = None
-            self._blended_image = None
-            self._float_image = None
-            self._image_path = None
-            self._predict_alpha = None
-            self._predict_foreground = None
-            self._predict_background = None
-            self._height = -1
-            self._width = -1
+        try:
+            image = np.array(Image.open(path_to_image))
+            if image is not None:
+                # If there are image, clean up variables.
+                self._image = image
+                self._image_path = path_to_image
+                self._trimap = None
+                self._resized_trimap = None
+                self._blended_image = None
+                self._float_image = None
+                self._image_path = None
+                self._predict_alpha = None
+                self._predict_foreground = None
+                self._predict_background = None
+                self._height = -1
+                self._width = -1
 
-            self._image = self._image.astype(np.uint8)
-            self._float_image = self._image / 255.0
-            self._height = self._image.shape[0]
-            self._width = self._image.shape[1]
-            self._trimap = np.zeros((self._height, self._width, 3)).astype(np.uint8)
-            self._trimap[:, :] = Color.BACKGROUND.value
-            # self._trimap = self._trimap.astype(np.uint8)
-            self._predict_alpha = np.zeros((self._height, self._width, 4)).astype(np.uint8)
-            self.update_blended_image()
+                self._image = self._image.astype(np.uint8)
+                self._float_image = cv2.resize(self._image, (224, 224)) / 255.0
+                self._height = self._image.shape[0]
+                self._width = self._image.shape[1]
+                self._trimap = np.zeros((self._height, self._width, 3)).astype(np.uint8)
+                self._trimap[:, :] = Color.BACKGROUND.value
+                self._resized_trimap = np.zeros((224, 224), dtype=np.uint8)
+                self._predict_alpha = np.zeros((self._height, self._width, 4)).astype(np.uint8)
+                self.update_blended_image()
 
-            # Create image texture
-            self._image_texture_id = (pyglet.gl.GLuint * 1)()
-            pyglet.gl.glGenTextures(1, self._image_texture_id)
-            update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
-                           self._width, self._height, self._blended_image.tobytes())
+                # Create image texture
+                self._image_texture_id = (pyglet.gl.GLuint * 1)()
+                pyglet.gl.glGenTextures(1, self._image_texture_id)
+                update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
+                               self._width, self._height, self._blended_image.tobytes())
 
-            # Create trimap texture
-            self._trimap_image_texture_id = (pyglet.gl.GLuint * 1)()
-            pyglet.gl.glGenTextures(1, self._trimap_image_texture_id)
-            update_texture(self._trimap_image_texture_id[0], pyglet.gl.GL_RGB,
-                           self._width, self._height, self._trimap.tobytes())
+                # Create trimap texture
+                self._trimap_image_texture_id = (pyglet.gl.GLuint * 1)()
+                pyglet.gl.glGenTextures(1, self._trimap_image_texture_id)
+                update_texture(self._trimap_image_texture_id[0], pyglet.gl.GL_RGB,
+                               self._width, self._height, self._trimap.tobytes())
 
-            # Create predict alpha texture
-            self._predict_alpha_texture_id = (pyglet.gl.GLuint * 1)()
-            pyglet.gl.glGenTextures(1, self._predict_alpha_texture_id)
-            update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
-                           self._width, self._height, self._predict_alpha.tobytes())
-            self.predict()
-            self._image_path = path_to_image
-            self._image = np.array(Image.open(self._image_path))
+                # Create predict alpha texture
+                self._predict_alpha_texture_id = (pyglet.gl.GLuint * 1)()
+                pyglet.gl.glGenTextures(1, self._predict_alpha_texture_id)
+                update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
+                               self._width, self._height, self._predict_alpha.tobytes())
+                self.predict()
+                self._image_path = path_to_image
+                self._image = np.array(Image.open(self._image_path))
+        except PIL.UnidentifiedImageError:
+            print('Selected file is not a image file')
 
     def save_image(self, path_to_save):
         if self._predict_alpha is not None:
@@ -275,7 +281,8 @@ class HelloWorld(ImguiLayer):
                     root = tk.Tk()
                     root.withdraw()
                     image_path = filedialog.askopenfilename()
-                    self.load_image(image_path)
+                    if len(image_path) != 0:
+                        self.load_image(image_path)
 
                 clicked_save, _ = imgui.menu_item('save')
                 if clicked_save:
