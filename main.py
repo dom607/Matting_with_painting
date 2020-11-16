@@ -63,6 +63,12 @@ class HelloWorld(ImguiLayer):
 
     def __init__(self):
         super(HelloWorld, self).__init__()
+        self._model_dim = 512
+
+        # Texture ids.
+        self._predict_alpha_texture_id = (pyglet.gl.GLuint * 1)()
+        self._trimap_image_texture_id = (pyglet.gl.GLuint * 1)()
+        self._image_texture_id = (pyglet.gl.GLuint * 1)()
 
         self._text = "Input text here"
         self._drag_start_pos = []
@@ -75,6 +81,7 @@ class HelloWorld(ImguiLayer):
         # Images
         self._image = None
         self._trimap = None
+        self._resized_trimap = None
         self._blended_image = None
         self._float_image = None
         self._image_path = None
@@ -117,30 +124,29 @@ class HelloWorld(ImguiLayer):
                 self._height = -1
                 self._width = -1
 
+                # Clear gl
+
                 self._image = self._image.astype(np.uint8)
-                self._float_image = cv2.resize(self._image, (224, 224)) / 255.0
+                self._float_image = cv2.resize(self._image, (self._model_dim, self._model_dim)) / 255.0
                 self._height = self._image.shape[0]
                 self._width = self._image.shape[1]
                 self._trimap = np.zeros((self._height, self._width, 3)).astype(np.uint8)
                 self._trimap[:, :] = Color.BACKGROUND.value
-                self._resized_trimap = np.zeros((224, 224), dtype=np.uint8)
-                self._predict_alpha = np.zeros((self._height, self._width, 4)).astype(np.uint8)
+                self._resized_trimap = np.zeros((self._model_dim, self._model_dim), dtype=np.uint8)
+                self._predict_alpha = np.zeros((self._height, self._width, 3)).astype(np.uint8)
                 self.update_blended_image()
 
                 # Create image texture
-                self._image_texture_id = (pyglet.gl.GLuint * 1)()
                 pyglet.gl.glGenTextures(1, self._image_texture_id)
                 update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
                                self._width, self._height, self._blended_image.tobytes())
 
                 # Create trimap texture
-                self._trimap_image_texture_id = (pyglet.gl.GLuint * 1)()
                 pyglet.gl.glGenTextures(1, self._trimap_image_texture_id)
                 update_texture(self._trimap_image_texture_id[0], pyglet.gl.GL_RGB,
                                self._width, self._height, self._trimap.tobytes())
 
                 # Create predict alpha texture
-                self._predict_alpha_texture_id = (pyglet.gl.GLuint * 1)()
                 pyglet.gl.glGenTextures(1, self._predict_alpha_texture_id)
                 update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
                                self._width, self._height, self._predict_alpha.tobytes())
@@ -176,32 +182,33 @@ class HelloWorld(ImguiLayer):
         self.predict()
 
     def predict(self):
-        gray_tri_map = cv2.cvtColor(self._trimap[:, :, 0:3], cv2.COLOR_RGB2GRAY) / 255.0
-        h, w = gray_tri_map.shape
+        self._resized_trimap = cv2.resize(cv2.cvtColor(self._trimap, cv2.COLOR_RGB2GRAY), (self._model_dim, self._model_dim)) / 255.0
+        h, w = self._resized_trimap.shape
         model_trimap = np.zeros((h, w, 2))
-        model_trimap[gray_tri_map == 1, 1] = 1
-        model_trimap[gray_tri_map == 0, 0] = 1
+        model_trimap[self._resized_trimap == 1, 1] = 1
+        model_trimap[self._resized_trimap == 0, 0] = 1
 
         st = time.perf_counter()
-        # self._predict_foreground, self._predict_background, self._predict_alpha = pred(self._float_image,
-        #                                                                                trimap,
-        #                                                                                self._matting_model)
         _, _, alpha = pred(self._float_image, model_trimap, self._matting_model)
-        alpha = cv2.cvtColor(alpha, cv2.COLOR_GRAY2RGB)
-        self._predict_alpha = (alpha * 255.0).astype(np.uint8)
-        update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
-                       self._width, self._height, self._predict_alpha.tobytes())
-
         elapsed_time = time.perf_counter() - st
         print('Prediction time : {}'.format(elapsed_time))
+        self._predict_alpha = cv2.resize(cv2.cvtColor(alpha * 255.0, cv2.COLOR_GRAY2RGB), (self._width, self._height)).astype(np.uint8)
+        update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
+                       self._width, self._height, self._predict_alpha.tobytes())
+        elapsed_time = time.perf_counter() - st
+        print('Image processing time : {}'.format(elapsed_time))
 
-    def update_blended_image(self):
-        self._blended_image = self._image * (1.0 - self._trimap_transparency) + self._trimap * self._trimap_transparency
-        self._blended_image = self._blended_image.astype(np.uint8)
+    def update_blended_image(self, point_indices=None):
+        if point_indices == None:
+            self._blended_image = self._image * (1.0 - self._trimap_transparency) + self._trimap * self._trimap_transparency
+            self._blended_image = self._blended_image.astype(np.uint8)
+        else:
+            self._blended_image[point_indices] = self._image[point_indices] * (1.0 - self._trimap_transparency) + \
+                                                 self._trimap[point_indices] * self._trimap_transparency
+            self._blended_image = self._blended_image.astype(np.uint8)
 
     # TODO : Apply interpolation algorithm.
     def update_trimap(self, current_mouse_pos):
-
         # List up calculation point
         displacement_x = current_mouse_pos[0] - self._prev_mouse_pos[0]
         displacement_y = current_mouse_pos[1] - self._prev_mouse_pos[1]
@@ -253,9 +260,10 @@ class HelloWorld(ImguiLayer):
                     continue
 
                 update_coord.add((int(y + disp_y), int(x + disp_x)))
-        self._trimap[tuple(zip(*update_coord))] = self._brush_color.value
 
-        self.update_blended_image()
+        update_indices = tuple(zip(*update_coord))
+        self._trimap[update_indices] = self._brush_color.value
+        self.update_blended_image(update_indices)
         update_texture(self._image_texture_id[0], pyglet.gl.GL_RGB,
                        self._width, self._height, self._blended_image.tobytes())
         update_texture(self._trimap_image_texture_id[0], pyglet.gl.GL_RGB,
