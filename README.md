@@ -7,7 +7,7 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
 ## PIP dependencies
 - pytorch : 1.7.0 is used.
 - pyimgui : See the pyimgui page for installation. This project was created using the PyGame renderer.
-- opencv : Will be replace with Pillow.
+- opencv
 - numpy
 
 ## FBA Matting
@@ -29,3 +29,5 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
 - Update trimap even on mouse click. Currently, it only works when dragging.
 - Undo / Redo
 - File dialog change.
+- Reduce pip dependencies
+  - Replace opencv with Pillow.
