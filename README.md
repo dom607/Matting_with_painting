@@ -16,7 +16,9 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
 
 ## Known issue
 - Crash often occurs when the file dialog is opened. 
-
+- Performance issues
+  - The trimap update is slow when moving fast with a large brush size.
+  - If the image size is too large, a CUDA memory allocation error occurs. (e.g. NVIDIA ffhq dataset)
 ## TODO  
 - Save the last position and size of the window to imgui.ini.
 - Adding various inference results preview windows. (Foreground, Background)
