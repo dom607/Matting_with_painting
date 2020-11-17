@@ -1,4 +1,4 @@
-# Simple matting tool
+# Matting with painting tool
 Simple gui matting tool with PyImgui and FBA matting. It was developed on Windows and has not been tested on other platforms.
 - pyimgui : https://github.com/swistakm/pyimgui
 - FBA matting : https://github.com/MarcoForte/FBA_Matting
@@ -14,11 +14,18 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
 - It is attached as a submodule.
 - Download the pretrained model and place it in the FBA_Matting/pretrained directory.
 
+## Update
+### 11 / 7 / 2020
+- First commit.
+- Add auto scale process.
+  - The quality of the inference result of FBA matting is affected by the resolution of the input image.
+  - Freezing of several seconds may occur when first loading a high-resolution image.
+ 
 ## Known issue
 - Crash often occurs when the file dialog is opened. 
 - Performance issues
   - The trimap update is slow when moving fast with a large brush size.
-  - If the image size is too large, a CUDA memory allocation error occurs. (e.g. NVIDIA ffhq dataset)
+  
 ## TODO  
 - Save the last position and size of the window to imgui.ini.
 - Adding various inference results preview windows. (Foreground, Background)
@@ -33,3 +40,5 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
 - File dialog change.
 - Reduce pip dependencies
   - Replace opencv with Pillow.
+- Move predict call from main thread to worker thread.
+- Make it pretty.

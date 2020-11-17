@@ -25,7 +25,6 @@ if path not in sys.path:
     sys.path.append(path)
 from FBA_Matting.demo import pred
 from FBA_Matting.networks.models import build_model
-import matplotlib.pyplot as plt
 from PIL import Image
 import PIL
 from utils import update_texture
@@ -132,12 +131,12 @@ class HelloWorld(ImguiLayer):
                     pyglet.gl.glDeleteTextures(1, self._predict_alpha_texture_id)
 
                 self._image = self._image.astype(np.uint8)
-                self._float_image = cv2.resize(self._image, (self._model_dim, self._model_dim)) / 255.0
+                # self._float_image = cv2.resize(self._image, (self._model_dim, self._model_dim)) / 255.0
                 self._height = self._image.shape[0]
                 self._width = self._image.shape[1]
                 self._trimap = np.zeros((self._height, self._width, 3)).astype(np.uint8)
                 self._trimap[:, :] = Color.BACKGROUND.value
-                self._resized_trimap = np.zeros((self._model_dim, self._model_dim), dtype=np.uint8)
+                # self._resized_trimap = np.zeros((self._model_dim, self._model_dim), dtype=np.uint8)
                 self._predict_alpha = np.zeros((self._height, self._width, 3)).astype(np.uint8)
                 self.update_blended_image()
 
@@ -196,21 +195,37 @@ class HelloWorld(ImguiLayer):
         self.predict()
 
     def predict(self):
-        self._resized_trimap = cv2.resize(cv2.cvtColor(self._trimap, cv2.COLOR_RGB2GRAY), (self._model_dim, self._model_dim)) / 255.0
-        h, w = self._resized_trimap.shape
-        model_trimap = np.zeros((h, w, 2))
-        model_trimap[self._resized_trimap == 1, 1] = 1
-        model_trimap[self._resized_trimap == 0, 0] = 1
+        if self._resized_trimap is None or self._float_image is None:
+            # Find best scale.
+            self._scale = 1.0
+            gray_trimap = cv2.cvtColor(self._trimap, cv2.COLOR_RGB2GRAY) / 255.0
+            while True:
+                try:
+                    print(self._scale)
+                    self._resized_trimap = cv2.resize(gray_trimap, dsize=(0, 0), fx=self._scale, fy=self._scale)
+                    self._float_image = cv2.resize(self._image, dsize=(0, 0), fx=self._scale, fy=self._scale) / 255.0
+                    h, w = self._resized_trimap.shape
+                    model_trimap = np.zeros((h, w, 2))
+                    model_trimap[self._resized_trimap == 1, 1] = 1
+                    model_trimap[self._resized_trimap == 0, 0] = 1
+                    _, _, alpha = pred(self._float_image, model_trimap, self._matting_model)
+                    self._predict_alpha = cv2.resize(cv2.cvtColor(alpha * 255.0, cv2.COLOR_GRAY2RGB), (self._width, self._height)).astype(np.uint8)
+                    break
+                except RuntimeError:
+                    print('CUDA memory overflow')
+                    self._scale = self._scale - 0.1
+        else:
+            gray_trimap = cv2.cvtColor(self._trimap, cv2.COLOR_RGB2GRAY) / 255.0
+            self._resized_trimap = cv2.resize(gray_trimap, dsize=(0, 0), fx=self._scale, fy=self._scale)
+            h, w = self._resized_trimap.shape
+            model_trimap = np.zeros((h, w, 2))
+            model_trimap[self._resized_trimap == 1, 1] = 1
+            model_trimap[self._resized_trimap == 0, 0] = 1
+            _, _, alpha = pred(self._float_image, model_trimap, self._matting_model)
+            self._predict_alpha = cv2.resize(cv2.cvtColor(alpha * 255.0, cv2.COLOR_GRAY2RGB), (self._width, self._height)).astype(np.uint8)
 
-        # st = time.perf_counter()
-        _, _, alpha = pred(self._float_image, model_trimap, self._matting_model)
-        # elapsed_time = time.perf_counter() - st
-        # print('Prediction time : {}'.format(elapsed_time))
-        self._predict_alpha = cv2.resize(cv2.cvtColor(alpha * 255.0, cv2.COLOR_GRAY2RGB), (self._width, self._height)).astype(np.uint8)
         update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
                        self._width, self._height, self._predict_alpha.tobytes())
-        # elapsed_time = time.perf_counter() - st
-        # print('Image processing time : {}'.format(elapsed_time))
 
     def update_blended_image(self, point_indices=None):
         if point_indices == None:
