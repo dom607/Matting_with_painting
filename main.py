@@ -35,15 +35,15 @@ from utils import update_texture
 # 1. Using imgui.ini
 # 2. Add preview window. (Predict Alpha, masked_image with predict alpha, predict background, predict foreground)
 # 3. Zoom in / out
-# 4. Brush radius visualization
 # 5. Speed up.
 #  - Trimap make gray.
 #  - Make trimap update faster.
 #  - Using shader to display blended result.
 #  - Remove duplicated process. Especially in predict process.
 #  - Accelerate image processing process. ( i.e. Upscale from prediction result )
-# 6. 점을 찍을 수 있어야 된다. 현재 드래그만 됨.
+# 6. Update trimap when click action..
 # 7. Undo / Redo
+# 8. File dialog system change.
 
 
 class Matting_Model_Args:
@@ -63,7 +63,7 @@ class HelloWorld(ImguiLayer):
 
     def __init__(self):
         super(HelloWorld, self).__init__()
-        self._model_dim = 512
+        self._model_dim = 1024
 
         # Texture ids.
         self._predict_alpha_texture_id = (pyglet.gl.GLuint * 1)()
@@ -81,13 +81,13 @@ class HelloWorld(ImguiLayer):
         # Images
         self._image = None
         self._trimap = None
-        self._resized_trimap = None
-        self._blended_image = None
-        self._float_image = None
+        self._resized_trimap = None  # For prediction.
+        self._blended_image = None  # To display. TODO : Replace blending shader.
+        self._float_image = None  # For prediction.
         self._image_path = None
-        self._predict_alpha = None
-        self._predict_foreground = None
-        self._predict_background = None
+        self._predict_alpha = None  # Prediction result
+        self._predict_foreground = None  # Prediction result of foreground.
+        self._predict_background = None  # Prediction result of background.
         self._height = -1
         self._width = -1
 
@@ -113,18 +113,17 @@ class HelloWorld(ImguiLayer):
                 # If there are image, clean up variables.
                 self._image = image
                 self._image_path = path_to_image
+                self._blended_image = None
                 self._trimap = None
                 self._resized_trimap = None
-                self._blended_image = None
                 self._float_image = None
-                self._image_path = None
                 self._predict_alpha = None
                 self._predict_foreground = None
                 self._predict_background = None
                 self._height = -1
                 self._width = -1
 
-                # Clear gl
+                # Clear glTextures
                 if self._image_texture_id[0] != 0:
                     pyglet.gl.glDeleteTextures(1, self._image_texture_id)
                 if self._trimap_image_texture_id[0] != 0:
@@ -203,15 +202,15 @@ class HelloWorld(ImguiLayer):
         model_trimap[self._resized_trimap == 1, 1] = 1
         model_trimap[self._resized_trimap == 0, 0] = 1
 
-        st = time.perf_counter()
+        # st = time.perf_counter()
         _, _, alpha = pred(self._float_image, model_trimap, self._matting_model)
-        elapsed_time = time.perf_counter() - st
-        print('Prediction time : {}'.format(elapsed_time))
+        # elapsed_time = time.perf_counter() - st
+        # print('Prediction time : {}'.format(elapsed_time))
         self._predict_alpha = cv2.resize(cv2.cvtColor(alpha * 255.0, cv2.COLOR_GRAY2RGB), (self._width, self._height)).astype(np.uint8)
         update_texture(self._predict_alpha_texture_id[0], pyglet.gl.GL_RGB,
                        self._width, self._height, self._predict_alpha.tobytes())
-        elapsed_time = time.perf_counter() - st
-        print('Image processing time : {}'.format(elapsed_time))
+        # elapsed_time = time.perf_counter() - st
+        # print('Image processing time : {}'.format(elapsed_time))
 
     def update_blended_image(self, point_indices=None):
         if point_indices == None:
