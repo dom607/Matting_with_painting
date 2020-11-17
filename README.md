@@ -37,8 +37,6 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
 - Update trimap even on mouse click. Currently, it only works when dragging.
 - Undo / Redo
 - File dialog change.
-- Reduce pip dependencies
-  - Replace opencv with Pillow.
 - Move predict call from main thread to worker thread.
 - Make it pretty.
 - Add error alert dialog.
