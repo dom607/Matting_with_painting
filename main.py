@@ -131,12 +131,10 @@ class HelloWorld(ImguiLayer):
                     pyglet.gl.glDeleteTextures(1, self._predict_alpha_texture_id)
 
                 self._image = self._image.astype(np.uint8)
-                # self._float_image = cv2.resize(self._image, (self._model_dim, self._model_dim)) / 255.0
                 self._height = self._image.shape[0]
                 self._width = self._image.shape[1]
                 self._trimap = np.zeros((self._height, self._width, 3)).astype(np.uint8)
                 self._trimap[:, :] = Color.BACKGROUND.value
-                # self._resized_trimap = np.zeros((self._model_dim, self._model_dim), dtype=np.uint8)
                 self._predict_alpha = np.zeros((self._height, self._width, 3)).astype(np.uint8)
                 self.update_blended_image()
 
@@ -171,7 +169,13 @@ class HelloWorld(ImguiLayer):
 
     def save_image(self, path_to_save):
         if self._predict_alpha is not None:
-            cv2.imwrite(path_to_save, cv2.cvtColor(self._predict_alpha, cv2.COLOR_RGB2GRAY))
+            try:
+                if len(path_to_save.split('.')) != 2:
+                    path_to_save = path_to_save + '.png'
+                Image.fromarray(self._predict_alpha).convert(mode='L').save(path_to_save)
+            except ValueError:
+                # TODO : Raise error dialog.
+                print('Wrong file path. Must be image extension. e.g. out.png')
 
     def update_brush_size(self, brush_radius):
         self._brush_radius = brush_radius

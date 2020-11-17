@@ -4,11 +4,10 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
 - FBA matting : https://github.com/MarcoForte/FBA_Matting
 
 # Installation
-## PIP dependencies
+## Dependencies
 - pytorch : 1.7.0 is used.
 - pyimgui : See the pyimgui page for installation. This project was created using the PyGame renderer.
 - opencv
-- numpy
 
 ## FBA Matting
 - It is attached as a submodule.
@@ -42,3 +41,4 @@ Simple gui matting tool with PyImgui and FBA matting. It was developed on Window
   - Replace opencv with Pillow.
 - Move predict call from main thread to worker thread.
 - Make it pretty.
+- Add error alert dialog.
