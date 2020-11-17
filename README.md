@@ -1,5 +1,5 @@
 # Simple matting tool
-Simple gui matting tool with PyImgui and FBA matting.
+Simple gui matting tool with PyImgui and FBA matting. It was developed on Windows and has not been tested on other platforms.
 - pyimgui : https://github.com/swistakm/pyimgui
 - FBA matting : https://github.com/MarcoForte/FBA_Matting
 
